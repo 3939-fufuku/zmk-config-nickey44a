@@ -1,5 +1,5 @@
 description: PAW3222 with bidirectional SDIO and CS permanently tied to ground
-compatible: "nickey,paw3222-2wire"
+compatible: "pixart,paw3222-2wire"
 include: base.yaml
 properties:
   sclk-gpios:

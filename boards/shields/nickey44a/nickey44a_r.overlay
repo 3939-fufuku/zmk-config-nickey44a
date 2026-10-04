@@ -7,7 +7,7 @@
 
 / {
     trackball: trackball {
-        compatible = "nickey,paw3222-2wire";
+        compatible = "pixart,paw3222-2wire";
         sclk-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
         sdio-gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
         motion-gpios = <&gpio0 10 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;

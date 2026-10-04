@@ -7,7 +7,7 @@
  * CS is physically grounded; each transaction contains exactly 16 clocks.
  */
 
-#define DT_DRV_COMPAT nickey_paw3222_2wire
+#define DT_DRV_COMPAT pixart_paw3222_2wire
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
