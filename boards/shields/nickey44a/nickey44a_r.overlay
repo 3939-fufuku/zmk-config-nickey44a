@@ -1,4 +1,6 @@
 #include "nickey44a.dtsi"
+#include <input/processors/transform.dtsi>
+#include <dt-bindings/zmk/input_transform.h>
 
 // P0.09/P0.10 are the nRF52840 NFC pins. Use them as ordinary GPIOs.
 &uicr {
@@ -17,6 +19,8 @@
     trackball_listener: trackball_listener {
         compatible = "zmk,input-listener";
         device = <&trackball>;
+        input-processors = <&zip_xy_transform
+            (INPUT_TRANSFORM_X_INVERT | INPUT_TRANSFORM_Y_INVERT)>;
     };
 };
 
