@@ -1,0 +1,6 @@
+config NICKEY_PAW3222
+    bool "Nickey44A PAW3222 with CS tied to ground"
+    depends on GPIO && INPUT
+    default y if DT_HAS_PIXART_PAW3222_2WIRE_ENABLED
+    help
+      GPIO two-wire transport for the PAW3222. SDIO is released during reads.
