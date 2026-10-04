@@ -1,0 +1,18 @@
+description: PAW3222 with bidirectional SDIO and CS permanently tied to ground
+compatible: "nickey,paw3222-2wire"
+include: base.yaml
+properties:
+  sclk-gpios:
+    type: phandle-array
+    required: true
+  sdio-gpios:
+    type: phandle-array
+    required: true
+  motion-gpios:
+    type: phandle-array
+    required: true
+    description: Active-low MOTION output
+  res-cpi:
+    type: int
+    default: 1216
+    description: Resolution from 608 to 4826 CPI, in steps of 38

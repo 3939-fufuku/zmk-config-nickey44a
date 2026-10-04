@@ -63,3 +63,58 @@ Nickey44A の昇圧回路は、cormoran 氏が [DYA Dash の回路設計解説](
 
 - Copyright (c) 2025 cormoran
 - ライセンス全文: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+
+
+## PAW3222 センサー対応ブランチ（右手側）
+
+`codex/paw3222-right-2wire` は、右手側の XIAO nRF52840 に
+[14mmマウスセンサーモジュール](https://github.com/sekigon-gonnoc/small-mouse-sensor-module)
+を接続するための設定です。CSをGNDへ固定した2線通信を使います。
+
+| モジュール | 接続先 |
+| --- | --- |
+| 3.3V | 安定した3.3V電源 |
+| CS | GND |
+| MOTION | 右XIAOのP0.10 |
+| SDIO | 右XIAOのP1.10 |
+| SCLK | 右XIAOのP0.09 |
+| GND | XIAOと共通のGND |
+
+ピン番号はnRF52840のポート番号です。XIAOのD番号とは異なります。
+P0.09/P0.10はNFC兼用パッドのため、右側のデバイスツリーで
+`nfct-pins-as-gpios` を有効にしています。NFCアンテナは接続しません。
+NFCピン設定が初回起動時に反映される際、MCUが自動リセットする場合があります。
+
+### ビルドと書き込み
+
+1. GitHub Actionsでこのブランチの **build.yml** 実行が成功したことを確認します。
+2. その実行の `firmware` artifactをダウンロードして展開します。
+3. 右側XIAOをリセットボタンのダブルクリックでブートローダーに入り、
+   `nickey44a_r.uf2` をUSBドライブへコピーします。
+4. 左側も同じビルドの `nickey44a_l.uf2` を使用できます。
+5. 通常起動後、ボールを動かしてUSB/Bluetoothのカーソル移動を確認します。
+
+`firmware/v1.*` に保存された既存UF2はセンサー未対応です。
+通常、`settings_reset.uf2` の書き込みやペアリングの削除は不要です。
+既存のキー配列・Studio設定は変更しません。クリックやスクロールへの
+キー割り当ては追加していないため、必要に応じて別途設定してください。
+
+### 感度・向き
+
+初期感度は1216 CPIです。`boards/shields/nickey44a/nickey44a_r.overlay`
+の `res-cpi` を608〜4826の範囲・38刻みで変更し再ビルドできます。
+向きはセンサーの取り付けに依存します。逆方向ならZMKの
+`trackball_listener` に座標変換のinput processorを設定してください。
+
+### 実装と確認範囲
+
+メーカーのArduinoサンプルの通信波形と初期化処理を基にした
+ローカルドライバーを使います。SDIOは読み出し中に入力へ切り替え、
+CS制御用の追加配線を必要としません。MOTION割り込みで起動し、
+移動中は8ms間隔で読み出します。センサーの省電力モードを有効にしています。
+深いスリープからはキーボードのキーで復帰してください。
+
+ビルド成功は実機動作の保証ではありません。実機では電源、移動方向、
+低速・高速の追従、再起動後の動作、Bluetooth接続、スリープ復帰を確認してください。
+反応がなければ3.3V/GND、P1.10とD10の取り違え、FPCのピン順を確認し、
+センサーを含めて電源を入れ直してください。
