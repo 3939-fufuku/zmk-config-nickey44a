@@ -85,6 +85,10 @@ def main():
     assert lt.props["hold-time"].to_num() == 1
     assert enabled(lt, "invert-scroll-x") and enabled(lt, "invert-scroll-y")
     assert not enabled(rt, "press-and-hold")
+    assert enabled(rt, "invert-scroll-x") and enabled(rt, "invert-scroll-y")
+    inertia = right.label2node["tps43_touch_inertia"]
+    assert inertia.props["stop-threshold-q8"].to_num() == 256
+    assert inertia.props["release-timeout-ms"].to_num() == 100
     for name in ("single-tap", "two-finger-tap", "scroll", "switch-xy", "invert-x"):
         assert enabled(rt, name), name
     assert enabled(lt, "two-finger-tap") and enabled(lt, "scroll")

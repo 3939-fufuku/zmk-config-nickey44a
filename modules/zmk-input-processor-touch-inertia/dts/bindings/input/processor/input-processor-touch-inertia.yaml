@@ -2,6 +2,10 @@ description: Touch-release inertia for a relative wheel axis
 compatible: "zmk,input-processor-touch-inertia"
 include: ip_zero_param.yaml
 properties:
+  release-timeout-ms:
+    type: int
+    default: 100
+    description: Maximum age of the last nonzero wheel sample at release; older motion cannot launch inertia.
   cancel-scroll-inertia-on-ctrl:
     type: boolean
     description: Suppress scroll inertia while either Ctrl modifier is active.

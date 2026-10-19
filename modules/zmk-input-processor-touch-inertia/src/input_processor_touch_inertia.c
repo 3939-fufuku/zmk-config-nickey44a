@@ -25,6 +25,7 @@ struct touch_inertia_config {
     int32_t stop_threshold_q8;
     int32_t launch_threshold_q8;
     int32_t ema_new_permille;
+    int32_t release_timeout_ms;
     bool cancel_scroll_inertia_on_ctrl;
 };
 
@@ -134,7 +135,9 @@ static int observe_input(const struct device *dev, struct input_event *event,
             data->touching = true;
         } else if (data->touching) {
             data->touching = false;
-            if (data->scroll_seen && above_launch_threshold(data, cfg)) {
+            if (data->scroll_seen &&
+                k_uptime_get() - data->last_wheel_ms <= cfg->release_timeout_ms &&
+                above_launch_threshold(data, cfg)) {
                 data->inertia_running = true;
                 data->remainder_q8 = 0;
                 k_work_reschedule(&data->inertia_work, K_MSEC(cfg->tick_ms));
@@ -150,8 +153,17 @@ static int observe_input(const struct device *dev, struct input_event *event,
             int64_t now = k_uptime_get();
             /* Multiplication, rather than a signed left shift, also handles negatives. */
             int64_t sample = (int64_t)event->value * Q8_ONE;
+            /* A pause or reversal must not carry an old flick into this gesture. */
+            if (data->scroll_seen &&
+                (now - data->last_wheel_ms > cfg->release_timeout_ms ||
+                 (event->value > 0 && data->velocity_q8 < 0) ||
+                 (event->value < 0 && data->velocity_q8 > 0))) {
+                clear_scroll(data);
+            }
             if (data->scroll_seen) {
-                int64_t dt = MAX((int64_t)1, now - data->last_wheel_ms);
+                /* Queued samples can arrive together; never amplify a delta
+                 * because its delivery interval is shorter than one tick. */
+                int64_t dt = MAX((int64_t)cfg->tick_ms, now - data->last_wheel_ms);
                 sample = sample * cfg->tick_ms / dt;
             }
             int32_t sample_q8 = bounded_velocity(sample);
@@ -177,6 +189,9 @@ static int initialize(const struct device *dev) {
 static const struct zmk_input_processor_driver_api api = {.handle_event = observe_input};
 
 #define CREATE_INSTANCE(n)                                                                        \
+    BUILD_ASSERT(DT_INST_PROP(n, release_timeout_ms) > 0 &&                                      \
+                 DT_INST_PROP(n, release_timeout_ms) <= INT32_MAX,                              \
+                 "release timeout must be positive and fit int32_t");                           \
     BUILD_ASSERT(DT_INST_PROP(n, tick_ms) >= 0 && DT_INST_PROP(n, tick_ms) <= INT32_MAX / Q8_ONE,    \
                  "tick-ms exceeds the safe sample arithmetic range");                            \
     BUILD_ASSERT(DT_INST_PROP(n, decay_permille) >= 0 && DT_INST_PROP(n, decay_permille) < 1000,     \
@@ -199,6 +214,7 @@ static const struct zmk_input_processor_driver_api api = {.handle_event = observ
         .stop_threshold_q8 = DT_INST_PROP(n, stop_threshold_q8),                                   \
         .launch_threshold_q8 = DT_INST_PROP(n, launch_threshold_q8),                               \
         .ema_new_permille = DT_INST_PROP(n, ema_new_permille),                                     \
+        .release_timeout_ms = DT_INST_PROP(n, release_timeout_ms),                                \
         .cancel_scroll_inertia_on_ctrl = DT_INST_PROP(n, cancel_scroll_inertia_on_ctrl),           \
     };                                                                                           \
     DEVICE_DT_INST_DEFINE(n, initialize, NULL, &data_##n, &config_##n, POST_KERNEL,                 \

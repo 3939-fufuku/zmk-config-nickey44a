@@ -95,8 +95,10 @@
         touch-code = <INPUT_BTN_TOUCH>;
         tick-ms = <10>;
         decay-permille = <920>;
-        stop-threshold-q8 = <96>;
+        /* Stop before sub-unit ticks turn into separated wheel pulses. */
+        stop-threshold-q8 = <256>;
         launch-threshold-q8 = <384>;
+        release-timeout-ms = <100>;
         ema-new-permille = <250>;
         cancel-scroll-inertia-on-ctrl;
     };
@@ -138,6 +140,7 @@
         two-finger-tap;
         scroll;
         /* The listener swaps axes, so driver X controls host vertical scrolling. */
+        invert-scroll-x;
         invert-scroll-y;
 
         filter-settings = <0x0B>;

@@ -29,6 +29,7 @@ touch_inertia: touch_inertia {
     stop-threshold-q8 = <96>;
     launch-threshold-q8 = <384>;
     ema-new-permille = <250>;
+    release-timeout-ms = <100>;
     cancel-scroll-inertia-on-ctrl;
 };
 ```
@@ -43,7 +44,11 @@ instance. Split peripherals with no instance compile no mouse HID code.
 
 Nonzero wheel samples during touch are normalized to wheel units per tick.
 The first sample uses delta times 256; subsequent samples use measured uptime
-intervals clamped to at least 1 ms. EMA applies even to the first sample.
+intervals clamped to at least one tick, preventing queued/bunched samples from
+artificially multiplying the launch velocity. EMA applies even to the first sample.
+A direction reversal or a gap longer than `release-timeout-ms` resets the old
+velocity. Release more than this timeout after the last nonzero wheel sample
+does not launch inertia; stopping the fingers before lifting stops scrolling.
 Release without a wheel sample does nothing. Repeated release events do not
 restart inertia. Wheel input cancels an existing coast, including zero input.
 
@@ -66,7 +71,8 @@ callbacks must run in thread context (the normal Zephyr input listener path).
 tick-ms=0 becomes 1. Negative tick values, decay outside 0..999, nonpositive
 stop or launch thresholds, launch below stop, thresholds exceeding INT32_MAX,
 and EMA weights outside 0..1000 fail at compile time.
-No floating point, release timeout, flick classification, or axis guessing.
+No floating point, flick classification, or axis guessing.
+`release-timeout-ms` must be positive and fit int32_t.
 
 ## Tuning and hardware checks
 
@@ -91,3 +97,18 @@ Check deep sleep/wake followed by scrolling and flicking. No activity-state
 subscription is included; add one only if hardware testing demonstrates a
 stale state across sleep. Firmware build success does not verify touch feel
 or power-management behavior.
+
+## Nickey44A Mac scroll adjustment
+
+The right overlay uses stop threshold 256 Q8 (one wheel unit per tick) to
+avoid the sparse one-unit pulses at the end of a sub-unit coast. The generic
+module default remains 96. Direction is corrected with driver `invert-scroll-x`
+before the listener swaps axes, so both manual and inertial vertical scrolling
+reverse together. Pointer motion and the horizontal swipe axis are unaffected.
+This is relative mouse-wheel output, not native macOS trackpad momentum.
+Host acceleration and BLE delivery still require hardware testing.
+
+Run `python3 tests/test_touch_inertia.py` from the repository root for production
+C regression tests with a fake clock, work queue, and HID sink. They exercise
+bursty delivery, pauses, reversals, both signs, tail continuity, touch cancellation,
+and Ctrl cancellation; they do not simulate Zephyr concurrency or BLE timing.
