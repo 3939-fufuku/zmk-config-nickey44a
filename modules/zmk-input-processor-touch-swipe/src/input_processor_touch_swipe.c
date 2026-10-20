@@ -234,13 +234,13 @@ static int initialize(const struct device *dev) {
 static const struct zmk_input_processor_driver_api api = {.handle_event = observe_input};
 
 #define CREATE_INSTANCE(n)                                                                         \
-    BUILD_ASSERT(DT_INST_PROP(n, pair_slot) >= -1 && DT_INST_PROP(n, pair_slot) <= 1,             \
+    BUILD_ASSERT((int32_t)DT_INST_PROP(n, pair_slot) >= -1 && (int32_t)DT_INST_PROP(n, pair_slot) <= 1,             \
                  "pair-slot must be -1, 0 or 1");                                               \
-    BUILD_ASSERT(DT_INST_PROP(n, pair_direction) == -1 || DT_INST_PROP(n, pair_direction) == 1,   \
+    BUILD_ASSERT((int32_t)DT_INST_PROP(n, pair_direction) == -1 || (int32_t)DT_INST_PROP(n, pair_direction) == 1,   \
                  "pair-direction must be -1 or 1");                                            \
     BUILD_ASSERT(DT_INST_PROP(n, pair_window_ms) > 0 &&                                         \
                  DT_INST_PROP(n, pair_window_ms) <= INT32_MAX, "invalid pair window");            \
-    BUILD_ASSERT(DT_INST_PROP(n, pair_slot) < 0 || DT_INST_PROP(n, pair_keycode) != 0,            \
+    BUILD_ASSERT((int32_t)DT_INST_PROP(n, pair_slot) < 0 || DT_INST_PROP(n, pair_keycode) != 0,            \
                  "paired swipe needs a keycode");                                               \
     BUILD_ASSERT(DT_INST_PROP(n, override_layer) >= -1 &&                                        \
                  DT_INST_PROP(n, override_layer) < ZMK_KEYMAP_LAYERS_LEN, "invalid override layer"); \
@@ -264,8 +264,8 @@ static const struct zmk_input_processor_driver_api api = {.handle_event = observ
         .right_keycode = DT_INST_PROP(n, right_keycode),                                           \
         .override_layer = DT_INST_PROP(n, override_layer),                                       \
         .override_left_keycode = DT_INST_PROP(n, override_left_keycode),                         \
-        .pair_slot = DT_INST_PROP(n, pair_slot),                                               \
-        .pair_direction = DT_INST_PROP(n, pair_direction),                                     \
+        .pair_slot = (int32_t)DT_INST_PROP(n, pair_slot),                                               \
+        .pair_direction = (int32_t)DT_INST_PROP(n, pair_direction),                                     \
         .pair_window_ms = DT_INST_PROP(n, pair_window_ms),                                     \
         .pair_keycode = DT_INST_PROP(n, pair_keycode),                                         \
         .override_right_keycode = DT_INST_PROP(n, override_right_keycode),                       \

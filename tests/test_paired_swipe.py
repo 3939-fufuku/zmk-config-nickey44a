@@ -17,7 +17,43 @@ STUB = r'''
 #include <assert.h>
 #define DT_HAS_COMPAT_STATUS_OKAY(x) 1
 #define IS_ENABLED(x) 0
-#define DT_INST_FOREACH_STATUS_OKAY(x)
+#define BUILD_ASSERT(test, message) _Static_assert(test, message)
+#define DT_INST_PROP(n,p) DT_PROP_##n##_##p
+#define ZMK_KEYMAP_LAYERS_LEN 4
+#define POST_KERNEL 0
+#define CONFIG_KERNEL_INIT_PRIORITY_DEFAULT 0
+#define DEVICE_DT_INST_DEFINE(n,init,pm,data,cfg,level,priority,api) \
+ static const struct device dt_dev_##n __attribute__((unused)) = {data,cfg}
+/* Zephyr emits a negative DTS cell as a positive 32-bit cell literal. */
+#define DT_PROP_0_pair_direction 1
+#define DT_PROP_1_pair_direction 4294967295
+#define DT_PROP_0_pair_slot 0
+#define DT_PROP_1_pair_slot 1
+#define DT_PROP_0_pair_window_ms 250
+#define DT_PROP_1_pair_window_ms 250
+#define DT_PROP_0_pair_keycode 0x01070052
+#define DT_PROP_1_pair_keycode 0x01070052
+#define DT_PROP_0_hwheel_code 7
+#define DT_PROP_1_hwheel_code 6
+#define DT_PROP_0_wheel_code 6
+#define DT_PROP_1_wheel_code 8
+#define DT_PROP_0_touch_code 330
+#define DT_PROP_1_touch_code 330
+#define DT_PROP_0_threshold 8
+#define DT_PROP_1_threshold 8
+#define DT_PROP_0_axis_ratio 2
+#define DT_PROP_1_axis_ratio 2
+#define DT_PROP_0_left_keycode 0x0107002b
+#define DT_PROP_0_right_keycode 0x0307002b
+#define DT_PROP_1_left_keycode 0x000c0224
+#define DT_PROP_1_right_keycode 0x000c0225
+#define DT_PROP_0_override_layer -1
+#define DT_PROP_1_override_layer 1
+#define DT_PROP_0_override_left_keycode 0
+#define DT_PROP_0_override_right_keycode 0
+#define DT_PROP_1_override_left_keycode 0x0107002b
+#define DT_PROP_1_override_right_keycode 0x0307002b
+#define DT_INST_FOREACH_STATUS_OKAY(x) x(0) x(1)
 #define CLAMP(v,lo,hi) ((v)<(lo)?(lo):((v)>(hi)?(hi):(v)))
 #define ARG_UNUSED(x) (void)(x)
 #define CONTAINER_OF(p,t,m) ((t *)((char *)(p)-offsetof(t,m)))
@@ -76,14 +112,7 @@ static void setup(void) {
  now_ms=1000; emitted=0; layer1=false; pair_latched=false;
  memset(pads,0,sizeof(pads)); memset(pair_slots,0,sizeof(pair_slots));
  for (int i=0;i<2;++i) {
-  cfg[i]=(struct touch_swipe_config){
-   .hwheel_code=i==LEFT?7:6, .wheel_code=i==LEFT?6:8, .touch_code=TOUCH,
-   .threshold=8, .axis_ratio=2, .left_keycode=i==LEFT?L_IN:R_OUT,
-   .right_keycode=i==LEFT?L_OUT:R_IN, .override_layer=i==LEFT?-1:1,
-   .override_left_keycode=L_IN, .override_right_keycode=L_OUT,
-   .pair_slot=i, .pair_direction=i==LEFT?1:-1, .pair_window_ms=250,
-   .pair_keycode=MISSION,
-  };
+  cfg[i]=i==LEFT?config_0:config_1;
   dev[i]=(struct device){.data=&pads[i],.config=&cfg[i]};
   assert(initialize(&dev[i])==0);
  }
