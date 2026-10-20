@@ -9,6 +9,7 @@
 #endif
 
 #include <limits.h>
+#include <errno.h>
 #include <drivers/input_processor.h>
 #include <zmk/events/keycode_state_changed.h>
 #include <zmk/keymap.h>
@@ -26,9 +27,18 @@ struct touch_swipe_config {
     int32_t override_layer;
     uint32_t override_left_keycode;
     uint32_t override_right_keycode;
+    int32_t pair_slot;
+    int32_t pair_direction;
+    int32_t pair_window_ms;
+    uint32_t pair_keycode;
 };
 
 struct touch_swipe_data {
+    const struct device *dev;
+    struct k_work_delayable pending_work;
+    bool pending;
+    int64_t pending_since;
+    uint32_t pending_keycode;
     bool touching;
     bool swipe_fired;
     int32_t horizontal_accum;
@@ -36,6 +46,11 @@ struct touch_swipe_data {
     /* Total vertical travel prevents opposite scroll samples cancelling out. */
     int32_t vertical_travel;
 };
+
+/* Input callbacks and timeout work may run on different threads. */
+K_MUTEX_DEFINE(swipe_lock);
+static struct touch_swipe_data *pair_slots[2];
+static bool pair_latched;
 
 static int64_t magnitude(int32_t value) {
     return value < 0 ? -(int64_t)value : (int64_t)value;
@@ -45,11 +60,83 @@ static int32_t bounded_add(int32_t accum, int64_t delta) {
     return CLAMP((int64_t)accum + delta, (int64_t)INT32_MIN, (int64_t)INT32_MAX);
 }
 
-static void reset(struct touch_swipe_data *data) {
-    *data = (struct touch_swipe_data){0};
+static void reset_gesture(struct touch_swipe_data *data) {
+    data->touching = false;
+    data->swipe_fired = false;
+    data->horizontal_accum = 0;
+    data->vertical_accum = 0;
+    data->vertical_travel = 0;
 }
 
-static int observe_input(const struct device *dev, struct input_event *event,
+static void tap_keycode(uint32_t keycode) {
+    int64_t timestamp = k_uptime_get();
+    int press = raise_zmk_keycode_state_changed_from_encoded(keycode, true, timestamp);
+    int release = raise_zmk_keycode_state_changed_from_encoded(keycode, false, timestamp);
+    if (press < 0 || release < 0) {
+        LOG_WRN("touch swipe key output failed: %d/%d", press, release);
+    }
+}
+
+/* All pending/pair state changes and key emission hold swipe_lock. */
+static void cancel_pending(struct touch_swipe_data *data) {
+    data->pending = false;
+    k_work_cancel_delayable(&data->pending_work);
+}
+
+static void flush_pending(struct touch_swipe_data *data) {
+    if (!data->pending) {
+        return;
+    }
+    uint32_t keycode = data->pending_keycode;
+    cancel_pending(data);
+    tap_keycode(keycode);
+}
+
+static void pending_timeout(struct k_work *work) {
+    struct touch_swipe_data *data = CONTAINER_OF(
+        k_work_delayable_from_work(work), struct touch_swipe_data, pending_work);
+    const struct touch_swipe_config *cfg = data->dev->config;
+    k_mutex_lock(&swipe_lock, K_FOREVER);
+    if (data->pending) {
+        int64_t remaining = data->pending_since + cfg->pair_window_ms - k_uptime_get();
+        /* A cancelled old callback can run after another touch was scheduled. */
+        if (remaining > 0) {
+            k_work_reschedule(&data->pending_work, K_MSEC(remaining));
+        } else {
+            flush_pending(data);
+        }
+    }
+    k_mutex_unlock(&swipe_lock);
+}
+
+static void recognize_swipe(struct touch_swipe_data *data, uint32_t keycode) {
+    const struct touch_swipe_config *cfg = data->dev->config;
+    bool outward = cfg->pair_direction > 0 ? data->horizontal_accum > 0
+                                          : data->horizontal_accum < 0;
+    if (cfg->pair_slot < 0 || !outward) {
+        tap_keycode(keycode);
+        return;
+    }
+    struct touch_swipe_data *peer = pair_slots[1 - cfg->pair_slot];
+    int64_t now = k_uptime_get();
+    if (peer && peer->pending && now - peer->pending_since >= cfg->pair_window_ms) {
+        /* Enforce the deadline even if the system workqueue is delayed. */
+        flush_pending(peer);
+    }
+    if (peer && peer->pending && peer->touching) {
+        cancel_pending(peer);
+        pair_latched = true;
+        /* Both candidates are consumed; neither emits its ordinary shortcut. */
+        tap_keycode(cfg->pair_keycode);
+        return;
+    }
+    data->pending = true;
+    data->pending_since = now;
+    data->pending_keycode = keycode; /* Preserve the layer at recognition. */
+    k_work_reschedule(&data->pending_work, K_MSEC(cfg->pair_window_ms));
+}
+
+static int observe_locked(const struct device *dev, struct input_event *event,
                          uint32_t param1, uint32_t param2,
                          struct zmk_input_processor_state *state) {
     ARG_UNUSED(param1);
@@ -60,14 +147,24 @@ static int observe_input(const struct device *dev, struct input_event *event,
 
     if (event->type == INPUT_EV_KEY && event->code == cfg->touch_code) {
         if (!event->value) {
-            reset(data);
+            flush_pending(data);
+            reset_gesture(data);
+            if (cfg->pair_slot >= 0 && pair_slots[0] && pair_slots[1] &&
+                !pair_slots[0]->touching && !pair_slots[1]->touching) {
+                pair_latched = false;
+            }
             LOG_DBG("touch swipe release/reset");
         } else if (!data->touching) {
-            reset(data);
+            reset_gesture(data);
             data->touching = true;
             LOG_DBG("touch swipe start");
         }
         return ZMK_INPUT_PROC_CONTINUE;
+    }
+    if (cfg->pair_slot >= 0 && pair_latched) {
+        /* Re-arm only after both pads have released, including re-touch attempts. */
+        return event->type == INPUT_EV_REL && event->code == cfg->hwheel_code
+                   ? ZMK_INPUT_PROC_STOP : ZMK_INPUT_PROC_CONTINUE;
     }
     if (event->type != INPUT_EV_REL) {
         return ZMK_INPUT_PROC_CONTINUE;
@@ -95,12 +192,7 @@ static int observe_input(const struct device *dev, struct input_event *event,
             if (cfg->override_layer >= 0 && zmk_keymap_layer_active(cfg->override_layer)) {
                 keycode = left ? cfg->override_left_keycode : cfg->override_right_keycode;
             }
-            int64_t timestamp = k_uptime_get();
-            int press = raise_zmk_keycode_state_changed_from_encoded(keycode, true, timestamp);
-            int release = raise_zmk_keycode_state_changed_from_encoded(keycode, false, timestamp);
-            if (press < 0 || release < 0) {
-                LOG_WRN("touch swipe key output failed: %d/%d", press, release);
-            }
+            recognize_swipe(data, keycode);
             LOG_DBG("touch swipe %s fired", left ? "left" : "right");
         }
     }
@@ -108,9 +200,48 @@ static int observe_input(const struct device *dev, struct input_event *event,
     return ZMK_INPUT_PROC_STOP;
 }
 
+static int observe_input(const struct device *dev, struct input_event *event,
+                         uint32_t param1, uint32_t param2,
+                         struct zmk_input_processor_state *state) {
+    k_mutex_lock(&swipe_lock, K_FOREVER);
+    int result = observe_locked(dev, event, param1, param2, state);
+    k_mutex_unlock(&swipe_lock);
+    return result;
+}
+
+static int initialize(const struct device *dev) {
+    struct touch_swipe_data *data = dev->data;
+    const struct touch_swipe_config *cfg = dev->config;
+    data->dev = dev;
+    k_work_init_delayable(&data->pending_work, pending_timeout);
+    if (cfg->pair_slot >= 0) {
+        if (pair_slots[cfg->pair_slot]) {
+            return -EINVAL;
+        }
+        struct touch_swipe_data *peer = pair_slots[1 - cfg->pair_slot];
+        if (peer) {
+            const struct touch_swipe_config *other = peer->dev->config;
+            if (other->pair_window_ms != cfg->pair_window_ms ||
+                other->pair_keycode != cfg->pair_keycode) {
+                return -EINVAL;
+            }
+        }
+        pair_slots[cfg->pair_slot] = data;
+    }
+    return 0;
+}
+
 static const struct zmk_input_processor_driver_api api = {.handle_event = observe_input};
 
 #define CREATE_INSTANCE(n)                                                                         \
+    BUILD_ASSERT((int32_t)DT_INST_PROP(n, pair_slot) >= -1 && (int32_t)DT_INST_PROP(n, pair_slot) <= 1,             \
+                 "pair-slot must be -1, 0 or 1");                                               \
+    BUILD_ASSERT((int32_t)DT_INST_PROP(n, pair_direction) == -1 || (int32_t)DT_INST_PROP(n, pair_direction) == 1,   \
+                 "pair-direction must be -1 or 1");                                            \
+    BUILD_ASSERT(DT_INST_PROP(n, pair_window_ms) > 0 &&                                         \
+                 DT_INST_PROP(n, pair_window_ms) <= INT32_MAX, "invalid pair window");            \
+    BUILD_ASSERT((int32_t)DT_INST_PROP(n, pair_slot) < 0 || DT_INST_PROP(n, pair_keycode) != 0,            \
+                 "paired swipe needs a keycode");                                               \
     BUILD_ASSERT(DT_INST_PROP(n, override_layer) >= -1 &&                                        \
                  DT_INST_PROP(n, override_layer) < ZMK_KEYMAP_LAYERS_LEN, "invalid override layer"); \
     BUILD_ASSERT(DT_INST_PROP(n, override_layer) < 0 ||                                          \
@@ -133,9 +264,13 @@ static const struct zmk_input_processor_driver_api api = {.handle_event = observ
         .right_keycode = DT_INST_PROP(n, right_keycode),                                           \
         .override_layer = DT_INST_PROP(n, override_layer),                                       \
         .override_left_keycode = DT_INST_PROP(n, override_left_keycode),                         \
+        .pair_slot = (int32_t)DT_INST_PROP(n, pair_slot),                                               \
+        .pair_direction = (int32_t)DT_INST_PROP(n, pair_direction),                                     \
+        .pair_window_ms = DT_INST_PROP(n, pair_window_ms),                                     \
+        .pair_keycode = DT_INST_PROP(n, pair_keycode),                                         \
         .override_right_keycode = DT_INST_PROP(n, override_right_keycode),                       \
     };                                                                                            \
-    DEVICE_DT_INST_DEFINE(n, NULL, NULL, &data_##n, &config_##n, POST_KERNEL,                       \
+    DEVICE_DT_INST_DEFINE(n, initialize, NULL, &data_##n, &config_##n, POST_KERNEL,                       \
                           CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &api);
 
 DT_INST_FOREACH_STATUS_OKAY(CREATE_INSTANCE)

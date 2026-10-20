@@ -113,6 +113,14 @@ def main():
     assert right_swipe.props["override-layer"].to_num() == 1
     assert right_swipe.props["override-left-keycode"].to_num() == 0x0107002b
     assert right_swipe.props["override-right-keycode"].to_num() == 0x0307002b
+    # Outward signs after the existing per-pad transforms; Ctrl+Up on the central.
+    for node, slot, direction in ((swipe, 0, 1), (right_swipe, 1, 0xffffffff)):
+        assert node.props["pair-slot"].to_num() == slot
+        assert node.props["pair-direction"].to_num() == direction
+        assert node.props["pair-window-ms"].to_num() == 250
+        assert node.props["pair-keycode"].to_num() == 0x01070052
+    assert "tps43_touch_inertia" not in right.label2node
+
 
     chain, cells = [], cells_of(ls.props["input-processors"])
     while cells:
