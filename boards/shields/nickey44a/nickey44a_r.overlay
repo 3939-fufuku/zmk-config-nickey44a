@@ -88,19 +88,6 @@
         override-right-keycode = <LC(LS(TAB))>;
     };
 
-    tps43_touch_inertia: tps43_touch_inertia {
-        compatible = "zmk,input-processor-touch-inertia";
-        #input-processor-cells = <0>;
-        wheel-code = <INPUT_REL_WHEEL>;
-        touch-code = <INPUT_BTN_TOUCH>;
-        tick-ms = <10>;
-        decay-permille = <920>;
-        stop-threshold-q8 = <96>;
-        launch-threshold-q8 = <384>;
-        ema-new-permille = <250>;
-        cancel-scroll-inertia-on-ctrl;
-    };
-
     tps43_listener: tps43_listener {
         compatible = "zmk,input-listener";
         device = <&tps43>;
@@ -108,7 +95,7 @@
         input-processors = <&tps43_orientation (INPUT_TRANSFORM_XY_SWAP |
                                              INPUT_TRANSFORM_X_INVERT |
                                              INPUT_TRANSFORM_Y_INVERT)>,
-                           <&tps43_touch_swipe>, <&tps43_touch_inertia>;
+                           <&tps43_touch_swipe>; /* Firmware scroll inertia disabled. */
 
         snipe_layer {
             layers = <1>;
