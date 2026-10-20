@@ -59,6 +59,10 @@
         touch-code = <INPUT_BTN_TOUCH>;
         threshold = <8>;
         axis-ratio = <2>;
+        pair-slot = <0>;
+        pair-direction = <1>; /* Physical left = positive DIAL. */
+        pair-window-ms = <250>;
+        pair-keycode = <LC(UP)>;
         /* Measured left pad: physical right swipe produces negative DIAL. */
         left-keycode = <LC(TAB)>;
         right-keycode = <LC(LS(TAB))>;
@@ -82,6 +86,10 @@
         axis-ratio = <2>;
         left-keycode = <C_AC_BACK>;
         right-keycode = <C_AC_FORWARD>;
+        pair-slot = <1>;
+        pair-direction = <(-1)>; /* Physical right = negative HWHEEL. */
+        pair-window-ms = <250>;
+        pair-keycode = <LC(UP)>;
         override-layer = <1>;
         /* Physical right swipe is negative after orientation correction. */
         override-left-keycode = <LC(TAB)>;

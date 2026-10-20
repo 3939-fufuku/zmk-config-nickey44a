@@ -3,6 +3,22 @@ description: One horizontal swipe per complete touch, with configurable ZMK keyc
 compatible: "zmk,input-processor-touch-swipe"
 include: ip_zero_param.yaml
 properties:
+  pair-slot:
+    type: int
+    default: -1
+    description: Shared two-pad gesture slot (0 or 1); -1 disables pairing.
+  pair-direction:
+    type: int
+    default: 1
+    description: Sign of the outward horizontal axis after transforms; -1 or 1.
+  pair-window-ms:
+    type: int
+    default: 250
+    description: Time to wait for the other outward swipe; both instances must match.
+  pair-keycode:
+    type: int
+    default: 0
+    description: Encoded keycode for a paired outward swipe; both instances must match.
   hwheel-code:
     type: int
     required: true
