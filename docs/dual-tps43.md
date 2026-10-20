@@ -26,7 +26,7 @@ westのrevision、ZMK本体、Azoteqドライバーは変更しない。
 | 2本指でタップ | 中クリック | 右クリック |
 | 2本指で上下に動かす | 水平スクロール | 縦スクロール |
 | 2本指で左右にスワイプ | 左スワイプ：左のタブ／右スワイプ：右のタブ | 左スワイプ：進む／右スワイプ：戻る |
-| 縦スクロール後に指を離す | 慣性処理なし | 慣性スクロール |
+| 縦スクロール後に指を離す | 慣性処理なし | 慣性処理なし |
 | Layer 1で1本指移動 | - | Snipe（移動量を通常の2/3に抑える） |
 | Layer 1で2本指左右スワイプ | 左スワイプ：左のタブ／右スワイプ：右のタブ | 左スワイプ：左のタブ／右スワイプ：右のタブ |
 
@@ -47,7 +47,7 @@ westのrevision、ZMK本体、Azoteqドライバーは変更しない。
 ```text
 左TPS43 → 左input-splitの標準processors → BLE split (reg=0)
         → 右input-split proxy (reg=0) → 左専用input-listenerのtab swipe → 共通HID
-右TPS43 → 既存の右input-listener → 既存orientation/swipe/inertia/Snipe → 共通HID
+右TPS43 → 既存の右input-listener → orientation/swipe/Snipe → 共通HID
 ```
 
 左のprocessor順序は次の通り。1〜4はBLE転送前、5は右central側で行う。
@@ -79,7 +79,7 @@ invert-xは維持する。左に追加のorientation processorはない。
 上下・左右判定は実機で確認する。
 
 右TPS43はpress-and-holdを無効にし、Layer 1で左右スワイプをタブ移動へ切り替える。
-通常レイヤーのスワイプ、タップ、スクロール、inertia、orientation、
+通常レイヤーのスワイプ、タップ、スクロール、orientation、
 Layer 1 Snipe、感度、電源管理、RST/RDYは維持。
 固定ZMKのHIDはボタン押下をカウントするため、右の移動イベントは左の
 BTN_0保持を解除しない。左保持中の右タップも、タップ終了後に左の押下が残る。
@@ -143,3 +143,9 @@ BTN_1がホストへ出ないことも確認する。
 Deep Sleepでは起動時の既存RST処理を利用する。新たなsleep hookはない。
 保持中のBLE切断・peripheral再起動でUPが届かなかった場合の状態復旧は、
 この設定では追加していない。接続断を伴うケースは通常ドラッグと分けて確認する。
+
+## 慣性スクロールの無効化
+
+右input-listenerからtouch-inertiaを外し、そのDevicetreeノードも削除した。
+左右ともファームウェアによる慣性スクロールは行わない。通常のスクロールと
+ジェスチャは引き続き有効。変更を反映するには新しい右UF2を書き込む。
